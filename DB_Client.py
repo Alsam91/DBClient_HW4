@@ -178,4 +178,4 @@ if __name__ == '__main__':
     # DatabaseClient().creating_tables()
     # DatabaseClient().add_client()
     # DatabaseClient().add_phone_number()
-    DatabaseClient().choosing_function(int(input('Выберите функцию: ')))
+    DatabaseClient().choosing_function(int(input('Выберите функцию (функции описаны в файле README): ')))
