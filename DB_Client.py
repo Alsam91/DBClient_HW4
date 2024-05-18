@@ -1,4 +1,7 @@
+from pprint import pprint
 import psycopg2
+from psycopg2.extensions import AsIs
+from psycopg2 import sql
 from pprint import pprint
 
 
@@ -40,7 +43,8 @@ class DatabaseClient:
                 VALUES
                     ('Arnold','Schwarzenegger','iron@arny.com'),
                     ('Ronnie','Coleman','lightweight@baby.com'),
-                    ('Lou','Ferrigno','big@lou.com')
+                    ('Lou','Ferrigno','big@lou.com'),
+                    ('Arnold','Hernandez','sara@hernandez.com')
                     RETURNING *;
                 ''')
             conn.commit()
@@ -48,15 +52,15 @@ class DatabaseClient:
             pprint(cur.fetchall())
         conn.close()
 
-    def add_client_by_user(self, client_name, client_surname, client_email):  # добавление клиента пользователем программы
+    def add_client_by_user(self, client_name, client_surname,
+                           client_email):  # добавление клиента пользователем программы
         conn = psycopg2.connect(database='clients', user='postgres', password='sav2210x')
+        query = sql.SQL("INSERT INTO client(first_name, last_name, email) VALUES ({}, {}, {}) RETURNING *;").format(
+            sql.Literal(client_name),
+            sql.Literal(client_surname),
+            sql.Literal(client_email))
         with conn.cursor() as cur:
-            cur.execute(
-                '''
-                INSERT INTO client(first_name, last_name, email)
-                VALUES (%s,%s,%s)
-                RETURNING *;
-                ''', (client_name, client_surname, client_email))
+            cur.execute(query)
             conn.commit()
             print('Запись добавлена', cur.fetchall())
         conn.close()
@@ -71,7 +75,8 @@ class DatabaseClient:
                     (1, '984161716551'),
                     (2, '789461596587'),  
                     (2, '789461596534'),
-                    (3, '123456789123')
+                    (3, '123456789123'),
+                    (4, '127987789123')
                     RETURNING client_id,phone_number;
                 ''')
             conn.commit()
@@ -81,69 +86,76 @@ class DatabaseClient:
 
     def add_phone_number_by_user(self, client_id, client_phone):  # добавление телефона пользователем программы
         conn = psycopg2.connect(database='clients', user='postgres', password='sav2210x')
+        query = sql.SQL("INSERT INTO phone_numbers(client_id, phone_number) VALUES ({}, {}) RETURNING *;").format(
+            sql.Literal(client_id),
+            sql.Literal(client_phone))
         with conn.cursor() as cur:
-            cur.execute(
-                '''
-                INSERT INTO phone_numbers(client_id, phone_number)
-                VALUES (%s,%s)
-                RETURNING *;
-                ''', (client_id, client_phone))
+            cur.execute(query)
             conn.commit()
             print('Запись добавлена', cur.fetchall())
         conn.close()
 
-    def change_client_data_by_user(self, table_name, column_name, new_value, client_id):  # изменение данных пользователем программы
+    def change_client_data_by_user(self, table_name, column_name, new_value,
+                                   client_id):  # изменение данных пользователем программы
         conn = psycopg2.connect(database='clients', user='postgres', password='sav2210x')
+        query = sql.SQL("UPDATE {} SET {} = {} WHERE id = {} RETURNING *").format(
+            sql.Identifier(table_name),
+            sql.Identifier(column_name),
+            sql.Literal(new_value),
+            sql.Literal(client_id))
         with conn.cursor() as cur:
-            cur.execute(
-                '''
-                UPDATE {}
-                SET {} = %s
-                WHERE id = %s
-                RETURNING *;
-                '''.format(table_name, column_name),
-                (new_value, client_id))
+            cur.execute(query)
             conn.commit()
             print('Запись обновлена', cur.fetchall())
         conn.close()
 
     def delete_phone_by_user(self, deleted_phone):  # удаление номера телефона пользователем программы
         conn = psycopg2.connect(database='clients', user='postgres', password='sav2210x')
+        query = sql.SQL("DELETE FROM phone_numbers WHERE phone_number = {};").format(
+            sql.Literal(deleted_phone))
         with conn.cursor() as cur:
-            cur.execute(
-                '''
-                DELETE
-                FROM phone_numbers
-                WHERE phone_number = %s;
-                ''', (deleted_phone,))
+            cur.execute(query)
             conn.commit()
             print('Запись удалена')
         conn.close()
 
     def delete_client_by_user(self, client_id):  # удаление клиента пользователем программы
         conn = psycopg2.connect(database='clients', user='postgres', password='sav2210x')
+        query = (sql.SQL("DELETE FROM phone_numbers WHERE client_id = {}; DELETE FROM client WHERE id = {};").
+                 format(sql.Literal(client_id), sql.Literal(client_id)))
         with conn.cursor() as cur:
-            cur.execute(
-                '''
-                DELETE FROM phone_numbers
-                WHERE client_id = %s;
-                DELETE FROM client 
-                WHERE id = %s;
-                ''', (client_id, client_id))
+            cur.execute(query)
             conn.commit()
             print('Клиент удалён')
         conn.close()
 
-    def search_client_by_user(self, search):  # поиск клиента пользователем программы
+    def search_client_by_user(self, name, surname, mail, phone):  # поиск клиента пользователем программы
         conn = psycopg2.connect(database='clients', user='postgres', password='sav2210x')
+        if name == '':
+            name = '%'
+        if surname == '':
+            surname = '%'
+        if mail == '':
+            mail = '%'
+        if phone == '':
+            phone = '%'
+        query = sql.SQL('''
+                            SELECT c.id, c.first_name, c.last_name, c.email, p.phone_number
+                            FROM client c
+                            JOIN phone_numbers p
+                            ON c.id = p.client_id
+                            WHERE
+                                c.first_name LIKE {0} AND
+                                c.last_name LIKE {1} AND
+                                c.email LIKE {2} AND
+                                p.phone_number LIKE {3};
+                        ''').format(
+            sql.Literal(name),
+            sql.Literal(surname),
+            sql.Literal(mail),
+            sql.Literal(phone))
         with conn.cursor() as cur:
-            cur.execute(
-                '''
-                SELECT c.id, c.first_name, c.last_name, c.email, phn.phone_number FROM client c
-                JOIN phone_numbers phn ON c.id = phn.client_id
-                WHERE c.first_name = %s OR c.last_name = %s OR c.email = %s OR phn.phone_number = %s
-                order by c.first_name;
-                ''', (search, search, search, search))
+            cur.execute(query)
             conn.commit()
             print(cur.fetchall())
         conn.close()
@@ -169,7 +181,9 @@ class DatabaseClient:
             return self.delete_client_by_user(input('Введите ID удаляемого клиента: '))
         elif function == 6:
             print('Выбрана функция поиска клиента')
-            return self.search_client_by_user(input('Ведите имя, фамилию, почту или телефон клиента: '))
+            return self.search_client_by_user(input('Ведите имя клиента: '),
+                                              input('Ведите фамилию клиента: '), input('Ведите почту: '),
+                                              input('Ведите номер: '), )
         else:
             print('Такой функции нет')
 
